@@ -17,6 +17,7 @@ import numpy as np
 import argparse
 import pickle
 import os
+import cv2
 
 #Inspired by code that can be found at : https://www.pyimagesearch.com/2019/07/15/video-classification-with-keras-and-deep-learning/ 
 
@@ -27,13 +28,13 @@ ap.add_argument("-d", "--dataset", required=True,
 	help="path to input dataset")
 ap.add_argument("-m", "--model", default=None,
 	help="path to output serialized model")
-ap.add_argument("-e", "--epochs", type=int, default=25,
+ap.add_argument("-e", "--epochs", type=int, default=50,
 	help="# of epochs to train our network for")
 ap.add_argument("-p", "--plot", type=str, default="plot.png",
 	help="path to output loss/accuracy plot")
 args = ap.parse_args()
 
-from DataLoader import DataLoader
+#from DataLoader import DataLoader
 #Binary classification of colonoscopy videos 
 # label 0 = no resection 
 # label 1 = resection required
@@ -42,8 +43,9 @@ from DataLoader import DataLoader
 def main():
     
 
-    train_data, train_labels = DataLoader("train", datapath=args.dataset) #dataset is path to data 
-    val_data, val_labels = DataLoader("val", datapath=args.dataset)
+    train_data, train_labels = DataLoader("train", datapath=args.dataset, step=10) #dataset is path to data 
+    val_data, val_labels = DataLoader("val", datapath=args.dataset, step=10)
+
 
     # load the ResNet-50 network, ensuring the head FC layer sets are left   off
     baseModel = ResNet50(weights="imagenet", include_top=False, input_tensor=Input(shape=(224, 224, 3)))
@@ -70,43 +72,87 @@ def main():
     #binary crossentropy loss since we're doing a binary classification 
     model.compile(loss="binary_crossentropy", optimizer=opt, metrics=["accuracy"])   
 
-    H = model.fit(x=train_data, y=train_labels, batch_size=None, epochs=args.epochs,
-        validation_data=(val_data,val_labels))
+    val_freq = 2
+    H = model.fit(x=train_data, y=train_labels, batch_size=256, epochs=args.epochs,
+        validation_data=(val_data,val_labels), validation_freq=val_freq)
 
     # plot the training loss and accuracy
     N = args.epochs
     plt.style.use("ggplot")
     plt.figure()
     plt.plot(np.arange(0, N), H.history["loss"], label="train_loss")
-    plt.plot(np.arange(0, N), H.history["val_loss"], label="val_loss")
+    plt.plot(np.arange(0, N,val_freq), H.history["val_loss"], label="val_loss")
     plt.plot(np.arange(0, N), H.history["accuracy"], label="train_acc")
-    plt.plot(np.arange(0, N), H.history["val_accuracy"], label="val_acc")
+    plt.plot(np.arange(0, N, val_freq), H.history["val_accuracy"], label="val_acc")
     plt.title("Training Loss and Accuracy on Dataset")
     plt.xlabel("Epoch #")
     plt.ylabel("Loss/Accuracy")
+    plt.legend(loc="lower left")
+
+    plt.show()
+
+    with open('/trainHistoryDict', 'wb') as file_pi:
+        pickle.dump(H.history, file_pi)
+
+    model.save("first_run_12vid_step10", save_format='h5')
+
+
+def DataLoader(what, datapath, step):
+
+    STEP = step
+    frames = []
+    labels = []
+    f_counter = 0
+
+    if what == "train":
+        print("loading training data......")
+        directory = datapath + 'train/'
+
+    if what == "val":
+        print("loading validation data.....")
+        directory = datapath + 'val/'
+
+    for filename in os.listdir(directory):
+
+        video = cv2.VideoCapture(directory + filename)
+        name = filename.split("_")[0] #get the class of the video
+        if name=="adenoma" or name=="serrated":
+            label = [0,1]
+        elif name=='hyperplasic':
+            label = [1,0] #one hot encoded labels 
+        else :
+            print("issue with filename " + filename)
+
+        while True:
+            has_frame, frame = video.read()
+
+            if not has_frame:
+                #print('Reached the end of the video')
+                #print('selected frames:', f_counter // STEP)
+                break
+
+            if f_counter % STEP == 0:
+                # cv2.imshow('frame', frame)
+                # key = cv2.waitKey(50)
+                resized_frame = cv2.resize(frame, (224, 224))
+                frames.append(resized_frame)
+                labels.append(label)
+
+            f_counter += 1
+    
+    frames = np.asarray(frames)
+    print(frames.shape)
+    labels = np.asarray(labels)
+    print(labels.shape)
+    return frames, labels
 
 
 
 
 
 
-
-def evaluate(model):
-    print("Evaluating Network......")
-    #evaluate one video at a time 
-    #prediction done from all frames of that image
-    accuracy = []
-    model.eval()
-    #for video in validation set
-
-        #for frame in the video 
-        #predict the frame, 
-        #combine predictions 
-
-
-    #check accuracy vs - best accuracy :
-        #save model weights 
-
+if __name__ == "__main__":
+    main()
 
 
 
