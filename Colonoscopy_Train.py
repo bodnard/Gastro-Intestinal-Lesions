@@ -19,6 +19,11 @@ import pickle
 import os
 import cv2
 
+#from numba import jit, cuda 
+#import pycuda.autoinit
+#import pycuda.driver as cuda
+#from pycuda.compiler import SourceModule
+
 #Inspired by code that can be found at : https://www.pyimagesearch.com/2019/07/15/video-classification-with-keras-and-deep-learning/ 
 
 
@@ -28,7 +33,7 @@ ap.add_argument("-d", "--dataset", required=True,
 	help="path to input dataset")
 ap.add_argument("-m", "--model", default=None,
 	help="path to output serialized model")
-ap.add_argument("-e", "--epochs", type=int, default=50,
+ap.add_argument("-e", "--epochs", type=int, default=30,
 	help="# of epochs to train our network for")
 ap.add_argument("-p", "--plot", type=str, default="plot.png",
 	help="path to output loss/accuracy plot")
@@ -40,15 +45,19 @@ args = ap.parse_args()
 # label 1 = resection required
 
 
+# function optimized to run on gpu  
+#@jit(target ="cuda")
 def main():
     
 
     train_data, train_labels = DataLoader("train", datapath=args.dataset, step=10) #dataset is path to data 
     val_data, val_labels = DataLoader("val", datapath=args.dataset, step=10)
 
+    #train_data, train_labels = load_data("train", data_path=args.dataset)
+    #val_data, val_labels = load_data("val", data_path=args.dataset)
 
     # load the ResNet-50 network, ensuring the head FC layer sets are left   off
-    baseModel = ResNet50(weights="imagenet", include_top=False, input_tensor=Input(shape=(224, 224, 3)))
+    baseModel = ResNet50(weights="imagenet", include_top=False, input_tensor=Input(shape=(576, 768, 3)))
 
     # construct the head of the model that will be placed on top of the base model
     headModel = baseModel.output
@@ -73,10 +82,12 @@ def main():
     model.compile(loss="binary_crossentropy", optimizer=opt, metrics=["accuracy"])   
 
     val_freq = 2
-    H = model.fit(x=train_data, y=train_labels, batch_size=256, epochs=args.epochs,
+    H = model.fit(x=train_data, y=train_labels, batch_size=60, epochs=args.epochs,
         validation_data=(val_data,val_labels), validation_freq=val_freq)
 
+    print("finished fitting")
     # plot the training loss and accuracy
+    
     N = args.epochs
     plt.style.use("ggplot")
     plt.figure()
@@ -89,12 +100,15 @@ def main():
     plt.ylabel("Loss/Accuracy")
     plt.legend(loc="lower left")
 
+    print("trying to plot")
     plt.show()
 
+    '''
     with open('/trainHistoryDict', 'wb') as file_pi:
         pickle.dump(H.history, file_pi)
+    '''
 
-    model.save("first_run_12vid_step10", save_format='h5')
+    model.save("fulldata_10steps", save_format='h5')
 
 
 def DataLoader(what, datapath, step):
@@ -134,8 +148,8 @@ def DataLoader(what, datapath, step):
             if f_counter % STEP == 0:
                 # cv2.imshow('frame', frame)
                 # key = cv2.waitKey(50)
-                resized_frame = cv2.resize(frame, (224, 224))
-                frames.append(resized_frame)
+                #resized_frame = cv2.resize(frame, (224, 224))
+                frames.append(frame)
                 labels.append(label)
 
             f_counter += 1
@@ -146,30 +160,6 @@ def DataLoader(what, datapath, step):
     print(labels.shape)
     return frames, labels
 
-
-
-
-
-
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-if __name__ == "__main__":
-    main()
-
 
