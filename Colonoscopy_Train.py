@@ -76,6 +76,11 @@ def main():
     for layer in baseModel.layers:
 	    layer.trainable = False 
 
+    checkpoint_filepath = 'models/' 
+    
+    model_checkpoint_callback = tensorflow.keras.callbacks.ModelCheckpoint( filepath=checkpoint_filepath, 
+        monitor='val_acc',save_best_only=True) #save only the best model according to the validation set
+
     print("[INFO] compiling model...")
     opt = SGD(lr=1e-4, momentum=0.9, decay=1e-4 / args.epochs)
     #binary crossentropy loss since we're doing a binary classification 
@@ -83,11 +88,9 @@ def main():
 
     val_freq = 2
     H = model.fit(x=train_data, y=train_labels, batch_size=60, epochs=args.epochs,
-        validation_data=(val_data,val_labels), validation_freq=val_freq)
+        validation_data=(val_data,val_labels), validation_freq=val_freq, callbacks=[model_checkpoint_callback])
 
     print("finished fitting")
-    # plot the training loss and accuracy
-    
     N = args.epochs
     plt.style.use("ggplot")
     plt.figure()
