@@ -4,58 +4,61 @@
 
 import cv2
 import time
+import numpy as np
+import os
 
 def DataLoader(what, datapath, step):
-
     STEP = step
-    directory = datapath
-    
     frames = []
-    f_labels = []  # the labels for each frame
-    frame_label_list = []
+    labels = []
     f_counter = 0
 
     if what == "train":
-        directory += "train/"
+        print("loading training data......")
+        directory = datapath + 'train/'
 
     if what == "val":
-        directory += "val/"
-    
-    labels = open(directory + "labels.txt")
-    video_labels = labels.read().splitlines()
-    
-    names = open(directory + "names.txt")
-    video_names = names.read().splitlines()
-    # print(video_names)
-    
-        for index, video_name in enumerate(video_names):
-        video = cv2.VideoCapture(directory + video_name)
-        vid_set = len(video_names)
+        print("loading validation data.....")
+        directory = datapath + 'val/'
+
+    for filename in os.listdir(directory):
+
+        video = cv2.VideoCapture(directory + filename)
+        name = filename.split("_")[0]  # get the class of the video
+        if name == "adenoma" or name == "serrated":
+            label = [0, 1]
+        elif name == 'hyperplasic':
+            label = [1, 0]  # one hot encoded labels
+        else:
+            print("issue with filename " + filename)
+
         while True:
             has_frame, frame = video.read()
 
             if not has_frame:
-                # print('Reached the end of ', index + 1, '/', vid_set, ' video')
-                print('fram shape:', frames[-1].shape)
+                # print('Reached the end of the video')
                 # print('selected frames:', f_counter // STEP)
                 break
 
             if f_counter % STEP == 0:
                 # cv2.imshow('frame', frame)
                 # key = cv2.waitKey(50)
+                # resized_frame = cv2.resize(frame, (224, 224))
                 frames.append(frame)
-                f_labels.append(video_labels[index])
-                frame_label_list.append((frames[-1], f_labels[-1]))
+                labels.append(label)
 
             f_counter += 1
-    print("selected frames:", f_counter // STEP)
-    # cv2.destroyAllWindows()
-    return frame_label_list
-
+    frames = np.asarray(frames)
+    print(frames.shape)
+    labels = np.asarray(labels)
+    print(labels.shape)
+    print("total frames:", f_counter)
+    return frames, labels
 
 startTime = time.time()
 
 DataLoader("train", "data/", 10)
+DataLoader("val", "data/", 10)
 
 executionTime = (time.time() - startTime)
 print('Execution time in seconds: ' + str(executionTime))
